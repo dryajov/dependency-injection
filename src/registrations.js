@@ -6,8 +6,8 @@ import {metadata} from 'aurelia-metadata';
 * Decorator: Specifies a custom registration strategy for the decorated class/function.
 */
 export function registration(value: Registration): any {
-  return function(target) {
-    metadata.define(metadata.registration, value, target);
+  return function (target, key, descriptor) {
+    value.init(value, target, key, descriptor);
   };
 }
 
@@ -28,15 +28,44 @@ export function singleton(keyOrRegisterInChild?: any, registerInChild: boolean =
 /**
 * Customizes how a particular function is resolved by the Container.
 */
-export interface Registration {
+export class Registration {
   /**
-  * Called by the container to register the resolver.
-  * @param container The container the resolver is being registered with.
-  * @param key The key the resolver should be registered as.
-  * @param fn The function to create the resolver for.
-  * @return The resolver that was registered.
-  */
-  registerResolver(container: Container, key: any, fn: Function): Resolver;
+   * Factory function invoked instead of the target
+   */
+  factoryFn:Function;
+
+  /**
+   * Called to perform initialization of a registration class
+   * @param value The registration instance
+   * @param target The target to attach the registration to
+   * @param key An optional key for method invocations (method name)
+   * @param descriptor An optional method descriptor of the method
+     */
+  init(value:Registration, target:any, key?:string, descriptor?:any) {
+    if (key && key.length > 0) {
+      value.factoryFn = target[key].bind(target);
+      // TODO: move key to metadata
+      target = metadata.get('design:returntype', target, key);
+    }
+
+    metadata.define(metadata.registration, value, target);
+  }
+
+  /**
+   * Called by the container to register the resolver.
+   * @param container The container the resolver is being registered with.
+   * @param key The key the resolver should be registered as.
+   * @param fn The function to create the resolver for.
+   * @return The resolver that was registered.
+   */
+  registerResolver(container:Container, key:any, fn:Function):Resolver {
+    if (this.factoryFn) {
+      factory(this.factoryFn);
+      return this.factoryFn;
+    }
+
+    return fn;
+  }
 }
 
 /**
